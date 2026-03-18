@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Jobder</title>
+    <!-- En el <head> o antes de cerrar el <body> -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <h1>Respuesta de la IA</h1>
+    
+    <input id="pregunta" placeholder="Escribe tu pregunta...">
+    <button onclick="enviar()">Envía a la IA</button>
+    
+    <p id="respuesta"></p>
+
+    <script>
+        async function enviar() {
+            const btn = document.querySelector('button');
+            const output = document.getElementById('respuesta');
+            const prompt = document.getElementById('pregunta').value.trim();
+            if (!prompt) return alert('Escribe algo');
+
+            btn.disabled = true;
+            output.textContent = 'Generando respuesta...';
+
+            try {
+                const res = await fetch('http://localhost:8000/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Error en API');
+                output.innerHTML = marked.parse(data.answer);
+                } catch (err) {
+                output.textContent = 'Error: ' + err.message;
+                } finally {
+                btn.disabled = false;
+  }
+}
+    </script>
+    <div id="chat"></div>
+</body>
+</html>
