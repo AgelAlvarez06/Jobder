@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, Text, ForeignKey
+from sqlalchemy import Column, BigInteger, String, Text, ForeignKey, DateTime, func
 from sqlalchemy.dialects.postgresql import JSONB
 from database.base import Base
 from models.reclutador import Reclutador
@@ -13,3 +13,6 @@ class Vacante(Base):
     structured_data = Column(JSONB)
     job_text = Column(Text)
     embedding_model = Column(String)
+    fecha_creacion = Column(DateTime, default=func.now())
+    fecha_actualizacion = Column(DateTime, default=func.now(), onupdate=func.now())
+    

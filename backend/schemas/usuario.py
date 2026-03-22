@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, BigInteger
+from sqlalchemy import Column, String, BigInteger, DateTime, func
 from database.base import Base
 
 class Usuario(Base):
@@ -10,3 +10,4 @@ class Usuario(Base):
     oauth_provider = Column(String)
     oauth_id = Column(String)
     rol = Column(String)
+    fecha_creacion = Column(DateTime, default = func.now())
