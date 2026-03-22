@@ -1,46 +1,41 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Jobder</title>
-    <!-- En el <head> o antes de cerrar el <body> -->
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<meta charset="UTF-8">
+<title>Job AI Test</title>
+<link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
-    <h1>Respuesta de la IA</h1>
-    
-    <input id="pregunta" placeholder="Escribe tu pregunta...">
-    <button onclick="enviar()">Envía a la IA</button>
-    
-    <p id="respuesta"></p>
 
-    <script>
-        async function enviar() {
-            const btn = document.querySelector('button');
-            const output = document.getElementById('respuesta');
-            const prompt = document.getElementById('pregunta').value.trim();
-            if (!prompt) return alert('Escribe algo');
+<h1>Job Matching AI</h1>
 
-            btn.disabled = true;
-            output.textContent = 'Generando respuesta...';
+<h2>Crear Candidato</h2>
 
-            try {
-                const res = await fetch('http://localhost:8000/ask', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt }),
-            });
+<input id="cand_nombre" placeholder="Nombre">
+<textarea id="cand_profile" placeholder="Describe tu perfil"></textarea>
+<button onclick="crearCandidato()">Crear</button>
 
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'Error en API');
-                output.innerHTML = marked.parse(data.answer);
-                } catch (err) {
-                output.textContent = 'Error: ' + err.message;
-                } finally {
-                btn.disabled = false;
-  }
-}
-    </script>
-    <div id="chat"></div>
+<hr>
+
+<h2>Crear Vacante</h2>
+
+<input id="vac_titulo" placeholder="Título">
+<textarea id="vac_texto" placeholder="Descripción del trabajo"></textarea>
+<button onclick="crearVacante()">Crear</button>
+
+<hr>
+
+<h2>Buscar Vacantes Similares</h2>
+
+<textarea id="search_text" placeholder="Describe tu perfil"></textarea>
+<button onclick="buscarVacantes()">Buscar</button>
+
+<h3>Resultados</h3>
+
+<div id="resultados"></div>
+
+<script src="app.js"></script>
+
 </body>
 </html>
