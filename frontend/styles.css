@@ -17,10 +17,52 @@ background:#2c7be5;
 color:white;
 border:none;
 cursor:pointer;
+border-radius:4px;
+}
+
+button:hover{
+background:#1e5fa5;
 }
 
 #resultados{
 margin-top:20px;
-padding:10px;
-background:#f3f3f3;
+}
+
+.vacante-container{
+margin-bottom:15px;
+padding:12px;
+border:1px solid #ddd;
+border-radius:5px;
+background:white;
+box-shadow:0 2px 4px rgba(0,0,0,0.1);
+}
+
+.vacante-title{
+margin:0 0 8px 0;
+font-size:1.1em;
+}
+
+.vacante-score{
+margin:5px 0;
+font-weight:bold;
+font-size:1em;
+}
+
+.score-high{
+color:#4CAF50;
+}
+
+.score-medium{
+color:#FFC107;
+}
+
+.score-low{
+color:#F44336;
+}
+
+.vacante-description{
+margin:8px 0 0 0;
+font-size:0.9em;
+color:#666;
+line-height:1.4;
 }

@@ -30,11 +30,15 @@ def get_recommendations(request: RecommendationRequest, db: Session = Depends(ge
         Vacante.id.in_(results["ids"])
     ).all()
 
+    # Crear un mapa de ID a distancia para mantener el orden y scores
+    distance_map = {results["ids"][i]: results["distances"][i] for i in range(len(results["ids"]))}
+
     return [
         {
             "id": v.id,
             "titulo": v.titulo,
-            "job_text": v.job_text
+            "job_text": v.job_text,
+            "score": round(100 - (distance_map[v.id] * 100), 2)  # Convertir distancia a porcentaje de similitud
         }
         for v in vacantes
     ]

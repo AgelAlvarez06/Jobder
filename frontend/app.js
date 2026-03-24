@@ -84,14 +84,36 @@ const div = document.getElementById("resultados")
 
 div.innerHTML = ""
 
-data.forEach(vacante => {
+// Ordenar por score descendente
+data.sort((a, b) => b.score - a.score)
 
-const p = document.createElement("p")
-
-p.innerText = `Vacante: ${vacante.titulo}`
-
-div.appendChild(p)
-
+// Mostrar todas las vacantes con su score
+data.forEach((vacante, index) => {
+  const container = document.createElement("div")
+  container.className = "vacante-container"
+  
+  // Determinar el nivel de score
+  let scoreClass = "score-low"
+  if (vacante.score >= 70) scoreClass = "score-high"
+  else if (vacante.score >= 50) scoreClass = "score-medium"
+  
+  const title = document.createElement("h4")
+  title.className = "vacante-title"
+  title.innerText = `${index + 1}. ${vacante.titulo}`
+  
+  const score = document.createElement("p")
+  score.className = `vacante-score ${scoreClass}`
+  score.innerText = `✓ Alineación: ${vacante.score}%`
+  
+  const description = document.createElement("p")
+  description.className = "vacante-description"
+  description.innerText = vacante.job_text
+  
+  container.appendChild(title)
+  container.appendChild(score)
+  container.appendChild(description)
+  
+  div.appendChild(container)
 })
 
 }
