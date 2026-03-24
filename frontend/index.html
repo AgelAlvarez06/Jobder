@@ -1,41 +1,15 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>Job AI Test</title>
-<link rel="stylesheet" href="styles.css">
-</head>
 
-<body>
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Web App Interface Design</title>
+    </head>
 
-<h1>Job Matching AI</h1>
-
-<h2>Crear Candidato</h2>
-
-<input id="cand_nombre" placeholder="Nombre">
-<textarea id="cand_profile" placeholder="Describe tu perfil"></textarea>
-<button onclick="crearCandidato()">Crear</button>
-
-<hr>
-
-<h2>Crear Vacante</h2>
-
-<input id="vac_titulo" placeholder="Título">
-<textarea id="vac_texto" placeholder="Descripción del trabajo"></textarea>
-<button onclick="crearVacante()">Crear</button>
-
-<hr>
-
-<h2>Buscar Vacantes Similares</h2>
-
-<textarea id="search_text" placeholder="Describe tu perfil"></textarea>
-<button onclick="buscarVacantes()">Buscar</button>
-
-<h3>Resultados</h3>
-
-<div id="resultados"></div>
-
-<script src="app.js"></script>
-
-</body>
-</html>
+    <body>
+      <div id="root"></div>
+      <script type="module" src="/src/main.tsx"></script>
+    </body>
+  </html>
+  
