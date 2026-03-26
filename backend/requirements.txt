@@ -3,6 +3,7 @@ uvicorn
 sqlalchemy
 psycopg2-binary
 chromadb
-google.genai
+google-generativeai
 python-dotenv
 pydantic
+PyPDF2
