@@ -1,6 +1,15 @@
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+RUN npm install react react-dom
+
+COPY . .
+RUN npm run build
+
 FROM nginx:alpine
-COPY index.html /usr/share/nginx/html/index.html
-COPY app.js /usr/share/nginx/html/app.js
-COPY styles.css /usr/share/nginx/html/styles.css
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80

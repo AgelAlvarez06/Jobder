@@ -3,6 +3,8 @@ uvicorn
 sqlalchemy
 psycopg2-binary
 chromadb
-google.genai
+google-genai
 python-dotenv
-pydantic
+pydantic[email]
+python-jose[cryptography]
+bcrypt
