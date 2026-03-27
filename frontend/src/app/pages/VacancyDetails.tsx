@@ -16,10 +16,13 @@ export default function VacancyDetails() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
 
-  const vacancyIdNum = vacancyId ? parseInt(vacancyId) : 0;
+  const vacancyIdNum = vacancyId ? parseInt(vacancyId) : NaN;
 
   useEffect(() => {
-    if (!vacancyIdNum) return;
+    if (!vacancyIdNum || isNaN(vacancyIdNum)) {
+      setLoading(false);
+      return;
+    }
     vacantes
       .get(vacancyIdNum)
       .then(setVacancy)
