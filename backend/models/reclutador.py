@@ -1,5 +1,6 @@
 from sqlalchemy import Column, BigInteger, String, Text, DateTime, ForeignKey
 from sqlalchemy.sql import func
+from database.base import Base
 
 
 class Reclutador(Base):
