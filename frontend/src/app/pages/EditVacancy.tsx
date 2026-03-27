@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { ArrowLeft, Briefcase, MapPin, DollarSign, Clock, Building2, GraduationCap, Sparkles, FileText, Save } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -8,64 +8,142 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Badge } from "../components/ui/badge";
+import { vacantes, ApiError, type VacanteOut } from "../../lib/api";
+import { toast } from "sonner";
 
 export default function EditVacancy() {
   const { vacancyId } = useParams();
   const navigate = useNavigate();
+  const vacancyIdNum = vacancyId ? parseInt(vacancyId) : NaN;
 
-  // Mock data - in a real app, this would be fetched based on vacancyId
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
-    jobTitle: "Desarrollador Frontend Junior",
-    company: "TechCorp Guadalajara",
-    location: "zapopan",
-    jobType: "full-time",
-    workMode: "hibrido",
-    salaryMin: "15000",
-    salaryMax: "25000",
-    experience: "junior",
-    education: "bachelors",
-    industry: "tech",
-    description: "Buscamos un Desarrollador Frontend Junior apasionado por crear experiencias web excepcionales. Te unirás a un equipo dinámico trabajando en proyectos innovadores para clientes nacionales e internacionales.",
-    responsibilities: "• Desarrollar interfaces de usuario responsive utilizando React y TypeScript\n• Colaborar con diseñadores UX/UI para implementar diseños pixel-perfect\n• Optimizar aplicaciones para máxima velocidad y escalabilidad\n• Participar en code reviews y contribuir a las mejores prácticas del equipo",
-    requirements: "• Estudiante activo o egresado de Ingeniería en Computación, Sistemas o afín\n• Conocimiento sólido de HTML5, CSS3 y JavaScript\n• Experiencia básica con React y frameworks modernos\n• Familiaridad con Git y control de versiones",
-    benefits: "• Seguro de gastos médicos mayores\n• Vales de despensa\n• 15 días de vacaciones + días extras\n• Horario flexible\n• 2 días de home office por semana",
-    skills: ["React", "TypeScript", "HTML/CSS", "JavaScript", "Git", "Responsive Design"] as string[],
+    jobTitle: "",
+    company: "",
+    location: "",
+    jobType: "",
+    workMode: "",
+    salaryMin: "",
+    salaryMax: "",
+    experience: "",
+    education: "",
+    industry: "",
+    description: "",
+    responsibilities: "",
+    requirements: "",
+    benefits: "",
+    skills: [] as string[],
   });
-
   const [currentSkill, setCurrentSkill] = useState("");
 
+  useEffect(() => {
+    if (!vacancyIdNum || isNaN(vacancyIdNum)) {
+      setLoading(false);
+      return;
+    }
+    vacantes
+      .get(vacancyIdNum)
+      .then((v) => {
+        const sd = (v.structured_data || {}) as Record<string, unknown>;
+        setFormData({
+          jobTitle: v.titulo || "",
+          company: (sd.company as string) || "",
+          location: (sd.location as string) || "",
+          jobType: (sd.jobType as string) || "",
+          workMode: (sd.workMode as string) || "",
+          salaryMin: (sd.salaryMin as string) || "",
+          salaryMax: (sd.salaryMax as string) || "",
+          experience: (sd.experience as string) || "",
+          education: (sd.education as string) || "",
+          industry: (sd.industry as string) || "",
+          description: v.job_raw_text || "",
+          responsibilities: (sd.responsibilities as string) || "",
+          requirements: (sd.requirements as string) || "",
+          benefits: ((sd.benefits as string[]) || []).join("\n"),
+          skills: ((sd.skills as string[]) || []),
+        });
+      })
+      .catch(() => toast.error("Error al cargar vacante"))
+      .finally(() => setLoading(false));
+  }, [vacancyIdNum]);
+
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const addSkill = () => {
     if (currentSkill.trim() && !formData.skills.includes(currentSkill.trim())) {
-      setFormData(prev => ({
-        ...prev,
-        skills: [...prev.skills, currentSkill.trim()]
-      }));
+      setFormData((prev) => ({ ...prev, skills: [...prev.skills, currentSkill.trim()] }));
       setCurrentSkill("");
     }
   };
 
   const removeSkill = (skillToRemove: string) => {
-    setFormData(prev => ({
-      ...prev,
-      skills: prev.skills.filter(skill => skill !== skillToRemove)
-    }));
+    setFormData((prev) => ({ ...prev, skills: prev.skills.filter((s) => s !== skillToRemove) }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Here you would typically send the updated data to your backend
-    console.log("Updated job posting data:", formData);
-    // Navigate back to vacancy details
-    navigate(`/employer/vacancy/${vacancyId}`);
+    if (saving) return;
+
+    const jobTextParts = [
+      formData.jobTitle,
+      formData.description,
+      formData.responsibilities,
+      formData.requirements,
+      formData.skills.join(", "),
+    ].filter(Boolean);
+
+    setSaving(true);
+    try {
+      await vacantes.update(vacancyIdNum, {
+        titulo: formData.jobTitle,
+        job_text: jobTextParts.join(". "),
+        job_raw_text: formData.description,
+        structured_data: {
+          company: formData.company,
+          location: formData.location,
+          jobType: formData.jobType,
+          workMode: formData.workMode,
+          salaryMin: formData.salaryMin,
+          salaryMax: formData.salaryMax,
+          salary:
+            formData.salaryMin && formData.salaryMax
+              ? `$${Number(formData.salaryMin).toLocaleString()} - $${Number(formData.salaryMax).toLocaleString()} MXN/mes`
+              : "A convenir",
+          experience: formData.experience,
+          education: formData.education,
+          industry: formData.industry,
+          responsibilities: formData.responsibilities,
+          requirements: formData.requirements,
+          benefits: formData.benefits
+            .split("\n")
+            .map((b) => b.replace(/^[•\-]\s*/, "").trim())
+            .filter(Boolean),
+          skills: formData.skills,
+        },
+      });
+      toast.success("Vacante actualizada");
+      navigate(`/employer/vacancy/${vacancyId}`);
+    } catch (err) {
+      if (err instanceof ApiError) toast.error(err.message);
+      else toast.error("Error al actualizar");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Sparkles className="w-12 h-12 text-[#28a745] animate-pulse" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-blue-50/30 to-white">
-      {/* Header */}
       <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
@@ -84,391 +162,120 @@ export default function EditVacancy() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-full border-2 border-gray-300"
-                onClick={() => navigate(`/employer/vacancy/${vacancyId}`)}
-              >
+              <Button type="button" variant="outline" className="rounded-full border-2 border-gray-300" onClick={() => navigate(`/employer/vacancy/${vacancyId}`)}>
                 Cancelar
               </Button>
-              <Button
-                type="submit"
-                form="edit-vacancy-form"
-                className="rounded-full bg-[#28a745] hover:bg-[#28a745]/90 text-white"
-              >
+              <Button type="submit" form="edit-vacancy-form" disabled={saving} className="rounded-full bg-[#28a745] hover:bg-[#28a745]/90 text-white">
                 <Save className="w-4 h-4 mr-2" />
-                Guardar Cambios
+                {saving ? "Guardando..." : "Guardar Cambios"}
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <form id="edit-vacancy-form" onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Information */}
           <Card className="rounded-3xl border-2">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-[#003366]">
-                <Briefcase className="w-5 h-5" />
-                Información Básica
-              </CardTitle>
+              <CardTitle className="flex items-center gap-2 text-[#003366]"><Briefcase className="w-5 h-5" /> Información Básica</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid sm:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="jobTitle" className="text-[#003366]">
-                    Título del Puesto *
-                  </Label>
-                  <Input
-                    id="jobTitle"
-                    placeholder="ej. Desarrollador Frontend Junior"
-                    className="h-12 rounded-2xl"
-                    value={formData.jobTitle}
-                    onChange={(e) => handleInputChange("jobTitle", e.target.value)}
-                    required
-                  />
+                  <Label htmlFor="jobTitle" className="text-[#003366]">Título del Puesto *</Label>
+                  <Input id="jobTitle" className="h-12 rounded-2xl" value={formData.jobTitle} onChange={(e) => handleInputChange("jobTitle", e.target.value)} required />
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="company" className="text-[#003366]">
-                    Empresa *
-                  </Label>
-                  <Input
-                    id="company"
-                    placeholder="Nombre de tu empresa"
-                    className="h-12 rounded-2xl"
-                    value={formData.company}
-                    onChange={(e) => handleInputChange("company", e.target.value)}
-                    required
-                  />
+                  <Label htmlFor="company" className="text-[#003366]">Empresa *</Label>
+                  <Input id="company" className="h-12 rounded-2xl" value={formData.company} onChange={(e) => handleInputChange("company", e.target.value)} required />
                 </div>
               </div>
-
               <div className="grid sm:grid-cols-3 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="location" className="text-[#003366] flex items-center gap-1">
-                    <MapPin className="w-4 h-4" />
-                    Ubicación *
-                  </Label>
-                  <Select value={formData.location} onValueChange={(value) => handleInputChange("location", value)}>
-                    <SelectTrigger id="location" className="h-12 rounded-2xl">
-                      <SelectValue placeholder="Zona ZMG" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="zapopan">Zapopan</SelectItem>
-                      <SelectItem value="gdl">Guadalajara Centro</SelectItem>
-                      <SelectItem value="tlaquepaque">Tlaquepaque</SelectItem>
-                      <SelectItem value="tonala">Tonalá</SelectItem>
-                      <SelectItem value="tlajomulco">Tlajomulco</SelectItem>
-                      <SelectItem value="el-salto">El Salto</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-[#003366]"><MapPin className="w-4 h-4 inline mr-1" />Ubicación</Label>
+                  <Input className="h-12 rounded-2xl" value={formData.location} onChange={(e) => handleInputChange("location", e.target.value)} />
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="jobType" className="text-[#003366] flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    Tipo de Empleo *
-                  </Label>
-                  <Select value={formData.jobType} onValueChange={(value) => handleInputChange("jobType", value)}>
-                    <SelectTrigger id="jobType" className="h-12 rounded-2xl">
-                      <SelectValue placeholder="Seleccionar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="full-time">Tiempo Completo</SelectItem>
-                      <SelectItem value="part-time">Medio Tiempo</SelectItem>
-                      <SelectItem value="internship">Prácticas/Becario</SelectItem>
-                      <SelectItem value="contract">Por Contrato</SelectItem>
-                      <SelectItem value="temporary">Temporal</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-[#003366]"><Clock className="w-4 h-4 inline mr-1" />Tipo de Empleo</Label>
+                  <Input className="h-12 rounded-2xl" value={formData.jobType} onChange={(e) => handleInputChange("jobType", e.target.value)} />
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="workMode" className="text-[#003366]">
-                    Modalidad *
-                  </Label>
-                  <Select value={formData.workMode} onValueChange={(value) => handleInputChange("workMode", value)}>
-                    <SelectTrigger id="workMode" className="h-12 rounded-2xl">
-                      <SelectValue placeholder="Seleccionar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="presencial">Presencial</SelectItem>
-                      <SelectItem value="remoto">Remoto</SelectItem>
-                      <SelectItem value="hibrido">Híbrido</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="industry" className="text-[#003366] flex items-center gap-1">
-                    <Building2 className="w-4 h-4" />
-                    Industria *
-                  </Label>
-                  <Select value={formData.industry} onValueChange={(value) => handleInputChange("industry", value)}>
-                    <SelectTrigger id="industry" className="h-12 rounded-2xl">
-                      <SelectValue placeholder="Seleccionar industria" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="tech">Tecnología</SelectItem>
-                      <SelectItem value="finance">Finanzas</SelectItem>
-                      <SelectItem value="marketing">Marketing</SelectItem>
-                      <SelectItem value="design">Diseño</SelectItem>
-                      <SelectItem value="sales">Ventas</SelectItem>
-                      <SelectItem value="education">Educación</SelectItem>
-                      <SelectItem value="healthcare">Salud</SelectItem>
-                      <SelectItem value="manufacturing">Manufactura</SelectItem>
-                      <SelectItem value="retail">Retail</SelectItem>
-                      <SelectItem value="other">Otro</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-[#003366]">Modalidad</Label>
+                  <Input className="h-12 rounded-2xl" value={formData.workMode} onChange={(e) => handleInputChange("workMode", e.target.value)} />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Compensation & Requirements */}
           <Card className="rounded-3xl border-2">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-[#003366]">
-                <DollarSign className="w-5 h-5" />
-                Compensación y Requisitos
-              </CardTitle>
+              <CardTitle className="flex items-center gap-2 text-[#003366]"><DollarSign className="w-5 h-5" /> Compensación</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid sm:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="salaryMin" className="text-[#003366]">
-                    Salario Mínimo (MXN/mes)
-                  </Label>
-                  <Input
-                    id="salaryMin"
-                    type="number"
-                    placeholder="15,000"
-                    className="h-12 rounded-2xl"
-                    value={formData.salaryMin}
-                    onChange={(e) => handleInputChange("salaryMin", e.target.value)}
-                  />
+                  <Label className="text-[#003366]">Salario Mínimo (MXN/mes)</Label>
+                  <Input type="number" className="h-12 rounded-2xl" value={formData.salaryMin} onChange={(e) => handleInputChange("salaryMin", e.target.value)} />
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="salaryMax" className="text-[#003366]">
-                    Salario Máximo (MXN/mes)
-                  </Label>
-                  <Input
-                    id="salaryMax"
-                    type="number"
-                    placeholder="25,000"
-                    className="h-12 rounded-2xl"
-                    value={formData.salaryMax}
-                    onChange={(e) => handleInputChange("salaryMax", e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="experience" className="text-[#003366]">
-                    Nivel de Experiencia *
-                  </Label>
-                  <Select value={formData.experience} onValueChange={(value) => handleInputChange("experience", value)}>
-                    <SelectTrigger id="experience" className="h-12 rounded-2xl">
-                      <SelectValue placeholder="Seleccionar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="entry">Sin experiencia / Entry Level</SelectItem>
-                      <SelectItem value="junior">Junior (1-2 años)</SelectItem>
-                      <SelectItem value="mid">Intermedio (3-5 años)</SelectItem>
-                      <SelectItem value="senior">Senior (5+ años)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="education" className="text-[#003366] flex items-center gap-1">
-                    <GraduationCap className="w-4 h-4" />
-                    Nivel Educativo *
-                  </Label>
-                  <Select value={formData.education} onValueChange={(value) => handleInputChange("education", value)}>
-                    <SelectTrigger id="education" className="h-12 rounded-2xl">
-                      <SelectValue placeholder="Seleccionar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="student">Estudiante Activo</SelectItem>
-                      <SelectItem value="bachelors">Licenciatura</SelectItem>
-                      <SelectItem value="masters">Maestría</SelectItem>
-                      <SelectItem value="phd">Doctorado</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-[#003366]">Salario Máximo (MXN/mes)</Label>
+                  <Input type="number" className="h-12 rounded-2xl" value={formData.salaryMax} onChange={(e) => handleInputChange("salaryMax", e.target.value)} />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Job Description */}
           <Card className="rounded-3xl border-2">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-[#003366]">
-                <FileText className="w-5 h-5" />
-                Descripción del Puesto
-              </CardTitle>
+              <CardTitle className="flex items-center gap-2 text-[#003366]"><FileText className="w-5 h-5" /> Descripción</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-[#003366]">
-                  Descripción General *
-                </Label>
-                <Textarea
-                  id="description"
-                  placeholder="Describe el puesto, el equipo de trabajo y lo que el candidato hará día a día..."
-                  className="min-h-32 rounded-2xl resize-none"
-                  value={formData.description}
-                  onChange={(e) => handleInputChange("description", e.target.value)}
-                  required
-                />
+                <Label className="text-[#003366]">Descripción General *</Label>
+                <Textarea className="min-h-32 rounded-2xl resize-none" value={formData.description} onChange={(e) => handleInputChange("description", e.target.value)} required />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="responsibilities" className="text-[#003366]">
-                  Responsabilidades Principales
-                </Label>
-                <Textarea
-                  id="responsibilities"
-                  placeholder="Lista las principales responsabilidades del puesto..."
-                  className="min-h-32 rounded-2xl resize-none"
-                  value={formData.responsibilities}
-                  onChange={(e) => handleInputChange("responsibilities", e.target.value)}
-                />
+                <Label className="text-[#003366]">Responsabilidades</Label>
+                <Textarea className="min-h-32 rounded-2xl resize-none" value={formData.responsibilities} onChange={(e) => handleInputChange("responsibilities", e.target.value)} />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="requirements" className="text-[#003366]">
-                  Requisitos *
-                </Label>
-                <Textarea
-                  id="requirements"
-                  placeholder="Lista los requisitos indispensables para el puesto..."
-                  className="min-h-32 rounded-2xl resize-none"
-                  value={formData.requirements}
-                  onChange={(e) => handleInputChange("requirements", e.target.value)}
-                  required
-                />
+                <Label className="text-[#003366]">Requisitos *</Label>
+                <Textarea className="min-h-32 rounded-2xl resize-none" value={formData.requirements} onChange={(e) => handleInputChange("requirements", e.target.value)} required />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="benefits" className="text-[#003366]">
-                  Beneficios y Prestaciones
-                </Label>
-                <Textarea
-                  id="benefits"
-                  placeholder="Describe los beneficios que ofreces (seguro médico, días de vacaciones, horario flexible, etc.)"
-                  className="min-h-24 rounded-2xl resize-none"
-                  value={formData.benefits}
-                  onChange={(e) => handleInputChange("benefits", e.target.value)}
-                />
+                <Label className="text-[#003366]">Beneficios</Label>
+                <Textarea className="min-h-24 rounded-2xl resize-none" value={formData.benefits} onChange={(e) => handleInputChange("benefits", e.target.value)} />
               </div>
             </CardContent>
           </Card>
 
-          {/* Skills */}
           <Card className="rounded-3xl border-2">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-[#003366]">
-                <Sparkles className="w-5 h-5" />
-                Habilidades Requeridas
-              </CardTitle>
+              <CardTitle className="flex items-center gap-2 text-[#003366]"><Sparkles className="w-5 h-5" /> Habilidades</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="skills" className="text-[#003366]">
-                  Agregar Habilidades
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="skills"
-                    placeholder="ej. React, TypeScript, Figma..."
-                    className="h-12 rounded-2xl"
-                    value={currentSkill}
-                    onChange={(e) => setCurrentSkill(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addSkill();
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    onClick={addSkill}
-                    className="h-12 px-6 rounded-2xl bg-[#003366] hover:bg-[#003366]/90 text-white"
-                  >
-                    Agregar
-                  </Button>
-                </div>
+              <div className="flex gap-2">
+                <Input placeholder="ej. React, TypeScript..." className="h-12 rounded-2xl" value={currentSkill} onChange={(e) => setCurrentSkill(e.target.value)} onKeyPress={(e) => { if (e.key === "Enter") { e.preventDefault(); addSkill(); } }} />
+                <Button type="button" onClick={addSkill} className="h-12 px-6 rounded-2xl bg-[#003366] hover:bg-[#003366]/90 text-white">Agregar</Button>
               </div>
-
               {formData.skills.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {formData.skills.map((skill, index) => (
-                    <Badge
-                      key={index}
-                      variant="secondary"
-                      className="px-4 py-2 rounded-full bg-[#28a745]/10 text-[#28a745] hover:bg-[#28a745]/20 cursor-pointer"
-                      onClick={() => removeSkill(skill)}
-                    >
-                      {skill}
-                      <span className="ml-2 text-xs">×</span>
+                    <Badge key={index} variant="secondary" className="px-4 py-2 rounded-full bg-[#28a745]/10 text-[#28a745] hover:bg-[#28a745]/20 cursor-pointer" onClick={() => removeSkill(skill)}>
+                      {skill}<span className="ml-2 text-xs">×</span>
                     </Badge>
                   ))}
                 </div>
               )}
-
-              <p className="text-sm text-gray-500">
-                Haz clic en una habilidad para eliminarla
-              </p>
             </CardContent>
           </Card>
 
-          {/* Save Notice */}
-          <Card className="rounded-3xl border-2 bg-gradient-to-br from-[#003366]/5 to-[#28a745]/5">
-            <CardContent className="p-6">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#003366] to-[#28a745] flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="w-6 h-6 text-white" />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-[#003366]">Cambios en Vacante Activa</h3>
-                  <p className="text-sm text-gray-600">
-                    Los cambios se aplicarán inmediatamente y la vacante se re-evaluará con nuestro sistema de matching IA para encontrar nuevos candidatos compatibles.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Action Buttons */}
           <div className="flex items-center justify-end gap-4 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              className="h-14 px-8 rounded-full border-2 border-gray-300"
-              onClick={() => navigate(`/employer/vacancy/${vacancyId}`)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              size="lg"
-              className="h-14 px-12 rounded-full bg-gradient-to-r from-[#003366] to-[#28a745] hover:opacity-90 text-white shadow-lg"
-            >
+            <Button type="button" variant="outline" size="lg" className="h-14 px-8 rounded-full border-2 border-gray-300" onClick={() => navigate(`/employer/vacancy/${vacancyId}`)}>Cancelar</Button>
+            <Button type="submit" size="lg" disabled={saving} className="h-14 px-12 rounded-full bg-gradient-to-r from-[#003366] to-[#28a745] hover:opacity-90 text-white shadow-lg">
               <Save className="w-5 h-5 mr-2" />
-              Guardar Cambios
+              {saving ? "Guardando..." : "Guardar Cambios"}
             </Button>
           </div>
         </form>

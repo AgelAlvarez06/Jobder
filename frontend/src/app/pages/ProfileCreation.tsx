@@ -9,14 +9,20 @@ import { Textarea } from "../components/ui/textarea";
 import { Progress } from "../components/ui/progress";
 import { Badge } from "../components/ui/badge";
 import { motion, AnimatePresence } from "motion/react";
+import { useAuth } from "../../lib/auth-context";
+import { candidatos, reclutadores, ApiError } from "../../lib/api";
+import { toast } from "sonner";
 
 export default function ProfileCreation() {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 4;
-  const progress = (currentStep / totalSteps) * 100;
+  const { rol } = useAuth();
+  const isEmployer = rol === "reclutador";
 
-  // Form data
+  const [currentStep, setCurrentStep] = useState(1);
+  const totalSteps = isEmployer ? 2 : 4;
+  const progress = (currentStep / totalSteps) * 100;
+  const [loading, setLoading] = useState(false);
+
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -28,7 +34,9 @@ export default function ProfileCreation() {
     bio: "",
     cvFile: null as File | null,
     selectedInterests: [] as string[],
-    certifications: [] as string[]
+    certifications: [] as string[],
+    companyName: "",
+    companyDescription: "",
   });
 
   const interests = [
@@ -46,12 +54,51 @@ export default function ProfileCreation() {
     "Ingeniería Industrial"
   ];
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
-    } else {
-      // Complete profile and redirect to student dashboard
-      navigate("/student");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (isEmployer) {
+        await reclutadores.create({
+          nombre: formData.fullName,
+          nombre_compania: formData.companyName,
+          descripcion_compania: formData.companyDescription,
+        });
+        toast.success("Perfil de empleador creado");
+        navigate("/employer");
+      } else {
+        const profileParts = [
+          formData.fullName,
+          formData.degree,
+          formData.bio,
+          formData.selectedInterests.join(", "),
+          formData.certifications.join(", "),
+        ].filter(Boolean);
+
+        await candidatos.create({
+          nombre: formData.fullName,
+          profile_text: profileParts.join(". "),
+          telefono: formData.phone || undefined,
+          ubicacion: formData.location || undefined,
+          carrera: formData.degree || undefined,
+          habilidades: formData.selectedInterests.join(", ") || undefined,
+          descripcion: formData.bio || undefined,
+        });
+        toast.success("Perfil de candidato creado");
+        navigate("/student");
+      }
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.message);
+      } else {
+        toast.error("Error al crear perfil");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -74,18 +121,24 @@ export default function ProfileCreation() {
     setFormData({ ...formData, selectedInterests: newInterests });
   };
 
-  const steps = [
+  const candidateSteps = [
     { number: 1, title: "Información Básica", icon: User },
     { number: 2, title: "Cargar CV", icon: FileText },
     { number: 3, title: "Intereses", icon: Target },
     { number: 4, title: "Certificaciones", icon: Award }
   ];
 
+  const employerSteps = [
+    { number: 1, title: "Información Personal", icon: User },
+    { number: 2, title: "Datos de Empresa", icon: Target },
+  ];
+
+  const steps = isEmployer ? employerSteps : candidateSteps;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#003366] via-[#003366] to-[#28a745]">
       <div className="min-h-screen bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMC41IiBvcGFjaXR5PSIwLjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] bg-repeat">
-        
-        {/* Top Navigation */}
+
         <nav className="bg-white/10 backdrop-blur-md border-b border-white/20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
@@ -100,7 +153,6 @@ export default function ProfileCreation() {
         </nav>
 
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          {/* Progress Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h1 className="text-3xl font-bold text-white">Crear Tu Perfil</h1>
@@ -111,8 +163,7 @@ export default function ProfileCreation() {
             <Progress value={progress} className="h-3 bg-white/20" />
           </div>
 
-          {/* Step Indicators */}
-          <div className="grid grid-cols-4 gap-4 mb-8">
+          <div className={`grid grid-cols-${totalSteps} gap-4 mb-8`}>
             {steps.map((step) => (
               <div
                 key={step.number}
@@ -140,11 +191,9 @@ export default function ProfileCreation() {
             ))}
           </div>
 
-          {/* Form Card */}
           <Card className="rounded-3xl border-4 border-white/20 shadow-2xl">
             <CardContent className="p-8 md:p-12">
               <AnimatePresence mode="wait">
-                {/* Step 1: Basic Information */}
                 {currentStep === 1 && (
                   <motion.div
                     key="step1"
@@ -172,18 +221,6 @@ export default function ProfileCreation() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="email">Correo Electrónico</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          placeholder="maria@alumnos.udg.mx"
-                          className="h-12 rounded-2xl"
-                          value={formData.email}
-                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
                         <Label htmlFor="phone">Teléfono</Label>
                         <Input
                           id="phone"
@@ -205,44 +242,36 @@ export default function ProfileCreation() {
                         />
                       </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="degree">Carrera</Label>
-                        <Input
-                          id="degree"
-                          placeholder="Ingeniería en Computación"
-                          className="h-12 rounded-2xl"
-                          value={formData.degree}
-                          onChange={(e) => setFormData({ ...formData, degree: e.target.value })}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="graduationYear">Año de Graduación</Label>
-                        <Input
-                          id="graduationYear"
-                          placeholder="2024"
-                          className="h-12 rounded-2xl"
-                          value={formData.graduationYear}
-                          onChange={(e) => setFormData({ ...formData, graduationYear: e.target.value })}
-                        />
-                      </div>
+                      {!isEmployer && (
+                        <div className="space-y-2">
+                          <Label htmlFor="degree">Carrera</Label>
+                          <Input
+                            id="degree"
+                            placeholder="Ingeniería en Computación"
+                            className="h-12 rounded-2xl"
+                            value={formData.degree}
+                            onChange={(e) => setFormData({ ...formData, degree: e.target.value })}
+                          />
+                        </div>
+                      )}
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="bio">Sobre Ti</Label>
-                      <Textarea
-                        id="bio"
-                        placeholder="Cuéntanos brevemente sobre tus objetivos profesionales y lo que te apasiona..."
-                        className="min-h-32 rounded-2xl"
-                        value={formData.bio}
-                        onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                      />
-                    </div>
+                    {!isEmployer && (
+                      <div className="space-y-2">
+                        <Label htmlFor="bio">Sobre Ti</Label>
+                        <Textarea
+                          id="bio"
+                          placeholder="Cuéntanos brevemente sobre tus objetivos profesionales y lo que te apasiona..."
+                          className="min-h-32 rounded-2xl"
+                          value={formData.bio}
+                          onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                        />
+                      </div>
+                    )}
                   </motion.div>
                 )}
 
-                {/* Step 2: CV Upload */}
-                {currentStep === 2 && (
+                {currentStep === 2 && !isEmployer && (
                   <motion.div
                     key="step2"
                     initial={{ opacity: 0, x: 20 }}
@@ -299,21 +328,50 @@ export default function ProfileCreation() {
                         </div>
                       </label>
                     </div>
+                  </motion.div>
+                )}
 
-                    <div className="bg-blue-50 rounded-2xl p-6 space-y-2">
-                      <h4 className="font-semibold text-[#003366]">💡 Consejos para tu CV:</h4>
-                      <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
-                        <li>Incluye tu información de contacto actualizada</li>
-                        <li>Destaca tus habilidades técnicas y blandas</li>
-                        <li>Menciona proyectos académicos relevantes</li>
-                        <li>Incluye idiomas y certificaciones</li>
-                      </ul>
+                {currentStep === 2 && isEmployer && (
+                  <motion.div
+                    key="step2-employer"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
+                    <div>
+                      <h2 className="text-2xl font-bold text-[#003366] mb-2">Datos de Empresa</h2>
+                      <p className="text-gray-600">Cuéntanos sobre tu empresa</p>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="companyName">Nombre de la Empresa</Label>
+                        <Input
+                          id="companyName"
+                          placeholder="TechCorp Guadalajara"
+                          className="h-12 rounded-2xl"
+                          value={formData.companyName}
+                          onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="companyDesc">Descripción de la Empresa</Label>
+                        <Textarea
+                          id="companyDesc"
+                          placeholder="Describe la empresa, su misión y lo que la hace especial..."
+                          className="min-h-32 rounded-2xl"
+                          value={formData.companyDescription}
+                          onChange={(e) => setFormData({ ...formData, companyDescription: e.target.value })}
+                        />
+                      </div>
                     </div>
                   </motion.div>
                 )}
 
-                {/* Step 3: Interests */}
-                {currentStep === 3 && (
+                {currentStep === 3 && !isEmployer && (
                   <motion.div
                     key="step3"
                     initial={{ opacity: 0, x: 20 }}
@@ -361,8 +419,7 @@ export default function ProfileCreation() {
                   </motion.div>
                 )}
 
-                {/* Step 4: Certifications */}
-                {currentStep === 4 && (
+                {currentStep === 4 && !isEmployer && (
                   <motion.div
                     key="step4"
                     initial={{ opacity: 0, x: 20 }}
@@ -396,7 +453,7 @@ export default function ProfileCreation() {
                           </Button>
                         </div>
                       ))}
-                      
+
                       <div className="flex gap-2">
                         <Input
                           id="new-cert"
@@ -449,7 +506,6 @@ export default function ProfileCreation() {
                 )}
               </AnimatePresence>
 
-              {/* Navigation Buttons */}
               <div className="flex gap-4 mt-8 pt-8 border-t">
                 {currentStep > 1 && (
                   <Button
@@ -465,14 +521,18 @@ export default function ProfileCreation() {
                 <Button
                   size="lg"
                   onClick={handleNext}
-                  disabled={currentStep === 3 && formData.selectedInterests.length < 3}
+                  disabled={(currentStep === 3 && !isEmployer && formData.selectedInterests.length < 3) || loading}
                   className={`flex-1 h-14 rounded-full text-white ${
                     currentStep === totalSteps
                       ? "bg-[#28a745] hover:bg-[#28a745]/90"
                       : "bg-[#fd7e14] hover:bg-[#fd7e14]/90"
                   }`}
                 >
-                  {currentStep === totalSteps ? "Completar Perfil" : "Siguiente"}
+                  {loading
+                    ? "Guardando..."
+                    : currentStep === totalSteps
+                    ? "Completar Perfil"
+                    : "Siguiente"}
                   {currentStep < totalSteps && <ChevronRight className="w-5 h-5 ml-2" />}
                 </Button>
               </div>

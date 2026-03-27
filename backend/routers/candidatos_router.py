@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from dependencies.auth import get_db, get_current_user
 from models.usuario import Usuario
+from models.candidato import Candidato
 from schemas.candidato_schema import CandidatoCreate, CandidatoUpdate, CandidatoOut
 from services.gemini_service import generate_embedding
 from services.chroma_service import add_embedding, search_embedding
@@ -61,6 +62,8 @@ def get_my_profile(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    if current_user.rol != 'candidato':
+        raise HTTPException(status_code=403, detail="Solo candidatos pueden acceder a este recurso")
     candidato = db.query(Candidato).filter(Candidato.id_usuario == current_user.id).first()
     if not candidato:
         raise HTTPException(status_code=404, detail="Perfil de candidato no encontrado")
@@ -73,6 +76,8 @@ def update_my_profile(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    if current_user.rol != 'candidato':
+        raise HTTPException(status_code=403, detail="Solo candidatos pueden acceder a este recurso")
     candidato = db.query(Candidato).filter(Candidato.id_usuario == current_user.id).first()
     if not candidato:
         raise HTTPException(status_code=404, detail="Perfil de candidato no encontrado")
