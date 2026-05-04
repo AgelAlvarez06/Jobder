@@ -9,6 +9,7 @@ import VacancyDetails from "./pages/VacancyDetails";
 import VacancyCandidates from "./pages/VacancyCandidates";
 import EditVacancy from "./pages/EditVacancy";
 import Login from "./pages/Login";
+import { RequireAuth}  from "../lib/route-guard";
 
 export const router = createBrowserRouter([
   {
@@ -21,34 +22,66 @@ export const router = createBrowserRouter([
   },
   {
     path: "/student",
-    Component: StudentDashboard,
+    element: (
+      <RequireAuth requiredRole="candidato">
+        <StudentDashboard />
+      </RequireAuth>
+    ),
   },
   {
     path: "/employer",
-    Component: EmployerDashboard,
+    element: (
+      <RequireAuth requiredRole="reclutador">
+        <EmployerDashboard />
+      </RequireAuth>
+    ),
   },
   {
     path: "/employer/create-job",
-    Component: CreateJobPosting,
+    element: (
+      <RequireAuth requiredRole="reclutador">
+        <CreateJobPosting />
+      </RequireAuth>
+    ),
   },
   {
     path: "/employer/vacancy/:vacancyId",
-    Component: VacancyDetails,
+    element: (
+      <RequireAuth requiredRole="reclutador">
+        <VacancyDetails />
+      </RequireAuth>
+    ),
   },
   {
     path: "/employer/vacancy/:vacancyId/candidates",
-    Component: VacancyCandidates,
+    element: (
+      <RequireAuth requiredRole="reclutador">
+        <VacancyCandidates />
+      </RequireAuth>
+    ),
   },
   {
     path: "/employer/vacancy/:vacancyId/edit",
-    Component: EditVacancy,
+    element: (
+      <RequireAuth requiredRole="reclutador">
+        <EditVacancy />
+      </RequireAuth>
+    ),
   },
   {
     path: "/profile-setup",
-    Component: ProfileCreation,
+    element: (
+      <RequireAuth>
+        <ProfileCreation />
+      </RequireAuth>
+    ),
   },
   {
     path: "/chat/:matchId",
-    Component: ChatInterface,
+    element: (
+      <RequireAuth>
+        <ChatInterface />
+      </RequireAuth>
+    ),
   },
 ]);
