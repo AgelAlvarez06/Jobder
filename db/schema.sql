@@ -100,6 +100,10 @@ CREATE TABLE interacciones (
         REFERENCES vacantes(id)
         ON DELETE CASCADE,
 
+    actor_role VARCHAR(20)
+        CHECK (actor_role IN ('candidato','reclutador'))
+        NOT NULL,
+
     score_similitud FLOAT,
 
     accion VARCHAR(20)
@@ -107,7 +111,7 @@ CREATE TABLE interacciones (
 
     fecha_creacion TIMESTAMP DEFAULT NOW(),
 
-    UNIQUE(id_candidato, id_vacante)
+    UNIQUE(id_candidato, id_vacante, actor_role)
 );
 
 -- Matches
@@ -145,8 +149,16 @@ CREATE TABLE mensajes (
 
     contenido TEXT,
 
-    fecha_envio TIMESTAMP DEFAULT NOW()
+    fecha_envio TIMESTAMP DEFAULT NOW(),
+    read_at TIMESTAMP NULL
 );
+
+CREATE INDEX idx_mensajes_match_fecha
+ON mensajes(id_match, fecha_envio);
+
+CREATE INDEX idx_mensajes_match_unread
+ON mensajes(id_match, read_at)
+WHERE read_at IS NULL;
 
 -- Indices importantes
 

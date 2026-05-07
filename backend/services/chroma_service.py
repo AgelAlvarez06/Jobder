@@ -1,55 +1,82 @@
 import chromadb
-from chromadb.config import Settings
+from typing import Optional, List
 
-client = None
-collection = None
+from config.settings import CHROMA_PERSIST_DIR
+
+_client = None
+_collection = None
+COLLECTION_NAME = "jobder_collection"
 
 
 def get_client():
-    global client
-
-    if client is None:
-        client = chromadb.Client(
-            Settings(
-                persist_directory="./chroma_db"
-            )
-        )
-    return client
+    global _client
+    if _client is None:
+        _client = chromadb.PersistentClient(path=CHROMA_PERSIST_DIR)
+    return _client
 
 
 def get_collection():
-    global collection
-
-    if collection is None:
-        client = get_client()
-        collection = client.get_or_create_collection(
-            name="jobder_collection",
-            metadata={"hnsw:space": "cosine"}
+    global _collection
+    if _collection is None:
+        _collection = get_client().get_or_create_collection(
+            name=COLLECTION_NAME,
+            metadata={"hnsw:space": "cosine"},
         )
+    return _collection
 
-    return collection
 
-
-def add_embedding(id: str, embedding: list, document: str):
-    collection = get_collection()
-
-    collection.add(
+def upsert_embedding(id: str, embedding: list, document: str, metadata: Optional[dict] = None):
+    col = get_collection()
+    col.upsert(
         ids=[id],
         embeddings=[embedding],
         documents=[document],
-        metadatas=[{"source": id}]
+        metadatas=[metadata or {"source": id}],
     )
 
-def search_embedding(query_embedding: list, top_k: int = 5):
-    collection = get_collection()
 
-    results = collection.query(
+def delete_embedding(id: str):
+    col = get_collection()
+    try:
+        col.delete(ids=[id])
+    except Exception:
+        pass
+
+
+def query_embedding(
+    query_embedding: list,
+    top_k: int = 20,
+    id_prefix: Optional[str] = None,
+    exclude_ids: Optional[List[str]] = None,
+):
+    col = get_collection()
+    where = None
+    # Use Chroma where filter on ids if needed; simpler: post-filter.
+    n_request = top_k
+    if exclude_ids:
+        n_request = top_k + len(exclude_ids)
+    n_request = min(max(n_request, top_k), 200)
+
+    results = col.query(
         query_embeddings=[query_embedding],
-        n_results=top_k
+        n_results=n_request,
     )
 
-    return {
-        "ids": results["ids"][0],
-        "documents": results["documents"][0],
-        "distances": results["distances"][0]
-    }
+    ids = results["ids"][0] if results.get("ids") else []
+    distances = results["distances"][0] if results.get("distances") else []
+    documents = results["documents"][0] if results.get("documents") else []
+
+    out_ids, out_distances, out_documents = [], [], []
+    exclude_set = set(exclude_ids or [])
+    for i, cid in enumerate(ids):
+        if id_prefix and not cid.startswith(id_prefix):
+            continue
+        if cid in exclude_set:
+            continue
+        out_ids.append(cid)
+        out_distances.append(distances[i])
+        out_documents.append(documents[i])
+        if len(out_ids) >= top_k:
+            break
+
+    return {"ids": out_ids, "distances": out_distances, "documents": out_documents}

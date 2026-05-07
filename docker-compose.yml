@@ -1,6 +1,4 @@
-﻿#version: "3.9"
-
-services:
+﻿services:
   backend:
     build: ./backend
     container_name: jobder_backend
@@ -10,9 +8,17 @@ services:
       - ./backend/.env
     depends_on:
       - postgres
+      - redis
     volumes:
       - ./backend:/app
       - chroma_data:/app/chroma_db
+    networks:
+      - jobder_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: jobder_redis
+    restart: unless-stopped
     networks:
       - jobder_network
 
@@ -28,7 +34,8 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql
     networks:
       - jobder_network
 
@@ -37,7 +44,9 @@ services:
     container_name: jobder_frontend
     restart: unless-stopped
     ports:
-      - "3000:80"            # open http://localhost:3000
+      - "3000:80"
+    depends_on:
+      - backend
     networks:
       - jobder_network
 
