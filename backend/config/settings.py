@@ -21,5 +21,11 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", "/app/chroma_db")
 
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+EMBEDDING_CACHE_TTL = int(os.getenv("EMBEDDING_CACHE_TTL", "2592000"))  # 30 days
+FEED_CACHE_TTL = int(os.getenv("FEED_CACHE_TTL", "60"))
+SWIPED_CACHE_TTL = int(os.getenv("SWIPED_CACHE_TTL", "300"))
+CACHE_KEY_PREFIX = "jobder:v1"
+
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
 DEV_LOGIN_ENABLED = os.getenv("DEV_LOGIN_ENABLED", "0") == "1" and ENVIRONMENT != "production"

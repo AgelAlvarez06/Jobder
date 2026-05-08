@@ -9,46 +9,75 @@ import VacancyDetails from "./pages/VacancyDetails";
 import VacancyCandidates from "./pages/VacancyCandidates";
 import EditVacancy from "./pages/EditVacancy";
 import Login from "./pages/Login";
+import AuthCallback from "./pages/AuthCallback";
+import { RequireAuth } from "../lib/auth";
 
 export const router = createBrowserRouter([
-  {
-    path: "/",
-    Component: Landing,
-  },
-  {
-    path: "/login",
-    Component: Login,
-  },
+  { path: "/", Component: Landing },
+  { path: "/login", Component: Login },
+  { path: "/auth/callback", Component: AuthCallback },
   {
     path: "/student",
-    Component: StudentDashboard,
-  },
-  {
-    path: "/employer",
-    Component: EmployerDashboard,
-  },
-  {
-    path: "/employer/create-job",
-    Component: CreateJobPosting,
-  },
-  {
-    path: "/employer/vacancy/:vacancyId",
-    Component: VacancyDetails,
-  },
-  {
-    path: "/employer/vacancy/:vacancyId/candidates",
-    Component: VacancyCandidates,
-  },
-  {
-    path: "/employer/vacancy/:vacancyId/edit",
-    Component: EditVacancy,
+    element: (
+      <RequireAuth role="candidato">
+        <StudentDashboard />
+      </RequireAuth>
+    ),
   },
   {
     path: "/profile-setup",
-    Component: ProfileCreation,
+    element: (
+      <RequireAuth role="candidato">
+        <ProfileCreation />
+      </RequireAuth>
+    ),
+  },
+  {
+    path: "/employer",
+    element: (
+      <RequireAuth role="reclutador">
+        <EmployerDashboard />
+      </RequireAuth>
+    ),
+  },
+  {
+    path: "/employer/create-job",
+    element: (
+      <RequireAuth role="reclutador">
+        <CreateJobPosting />
+      </RequireAuth>
+    ),
+  },
+  {
+    path: "/employer/vacancy/:vacancyId",
+    element: (
+      <RequireAuth role="reclutador">
+        <VacancyDetails />
+      </RequireAuth>
+    ),
+  },
+  {
+    path: "/employer/vacancy/:vacancyId/candidates",
+    element: (
+      <RequireAuth role="reclutador">
+        <VacancyCandidates />
+      </RequireAuth>
+    ),
+  },
+  {
+    path: "/employer/vacancy/:vacancyId/edit",
+    element: (
+      <RequireAuth role="reclutador">
+        <EditVacancy />
+      </RequireAuth>
+    ),
   },
   {
     path: "/chat/:matchId",
-    Component: ChatInterface,
+    element: (
+      <RequireAuth>
+        <ChatInterface />
+      </RequireAuth>
+    ),
   },
 ]);

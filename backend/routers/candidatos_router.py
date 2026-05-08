@@ -9,9 +9,10 @@ from config.settings import GEMINI_EMBEDDING_MODEL
 from database.connection import get_db
 from dependencies.auth import require_candidato
 from models.candidato import Candidato
+from services import cache_service
 from services.chroma_service import upsert_embedding
 from services.cv_parser import extract_text
-from services.gemini_service import generate_embedding
+from services.gemini_service import get_or_generate_embedding
 from services.text_builder import build_candidato_profile_text
 from utils.chroma_ids import candidato_id
 
@@ -110,7 +111,7 @@ async def update_me(
     db.refresh(candidato)
 
     try:
-        embedding = generate_embedding(profile_text)
+        embedding = get_or_generate_embedding(profile_text)
         upsert_embedding(
             id=candidato_id(candidato.id),
             embedding=embedding,
@@ -120,5 +121,6 @@ async def update_me(
     except Exception as e:
         # Persist but surface the embedding error so the user knows.
         raise HTTPException(status_code=502, detail=f"Embedding failed: {e}")
-
+    cache_service.delete_prefix(cache_service.feed_candidato_prefix(candidato.id))
+    cache_service.delete_prefix(cache_service._k("feed", "vac"))
     return _serialize(candidato)
