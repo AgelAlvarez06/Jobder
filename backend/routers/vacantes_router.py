@@ -13,9 +13,10 @@ from models.usuario import Usuario
 from models.vacante import Vacante
 from models.candidato import Candidato
 from models.interaccion import Interaccion
-from services.chroma_service import upsert_embedding, delete_embedding
+from services import cache_service
+from services.chroma_service import upsert_embedding, delete_embedding, get_embedding_by_id
 from services.cv_parser import extract_text
-from services.gemini_service import generate_embedding
+from services.gemini_service import get_or_generate_embedding
 from services.recomendador_service import search_similar
 from services.text_builder import build_vacante_job_text
 from utils.chroma_ids import vacante_id, candidato_id, parse_candidato_id, CANDIDATO_PREFIX
@@ -45,7 +46,7 @@ def _serialize(v: Vacante) -> dict:
 
 
 def _embed_and_store(vacante: Vacante):
-    embedding = generate_embedding(vacante.job_text)
+    embedding = get_or_generate_embedding(vacante.job_text)
     upsert_embedding(
         id=vacante_id(vacante.id),
         embedding=embedding,
@@ -114,6 +115,8 @@ async def create_vacante(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Embedding failed: {e}")
 
+    # New vacante invalidates every candidate's feed cache (it's a new option).
+    cache_service.delete_prefix(cache_service._k("feed", "cand"))
     return _serialize(vacante)
 
 
@@ -177,6 +180,9 @@ async def update_vacante(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Embedding failed: {e}")
 
+    # Vacante text changed → its candidates feed and every candidato feed are stale.
+    cache_service.delete_prefix(cache_service.feed_vacante_prefix(v.id))
+    cache_service.delete_prefix(cache_service._k("feed", "cand"))
     return _serialize(v)
 
 
@@ -190,6 +196,8 @@ def delete_vacante(
     delete_embedding(vacante_id(v.id))
     db.delete(v)
     db.commit()
+    cache_service.delete_prefix(cache_service.feed_vacante_prefix(vacante_id_int))
+    cache_service.delete_prefix(cache_service._k("feed", "cand"))
     return {"status": "deleted", "id": vacante_id_int}
 
 
@@ -202,19 +210,33 @@ def candidatos_for_vacante(
 ):
     v = _get_owned(db, vacante_id_int, reclutador)
 
+    feed_key = cache_service.feed_vacante_candidatos_key(v.id, top_k)
+    cached = cache_service.get_json(feed_key)
+    if cached is not None:
+        return cached
+
     # Already swiped by THIS recruiter for THIS vacante (recruiter-side rows only).
-    swiped_candidato_ids = [
-        row[0]
-        for row in db.query(Interaccion.id_candidato)
-        .filter(
-            Interaccion.id_vacante == v.id,
-            Interaccion.actor_role == "reclutador",
+    swiped_key = cache_service.swiped_set_key("reclutador", reclutador.id, v.id)
+    swiped_candidato_ids = cache_service.get_json(swiped_key)
+    if swiped_candidato_ids is None:
+        swiped_candidato_ids = [
+            row[0]
+            for row in db.query(Interaccion.id_candidato)
+            .filter(
+                Interaccion.id_vacante == v.id,
+                Interaccion.actor_role == "reclutador",
+            )
+            .all()
+        ]
+        cache_service.set_json(
+            swiped_key, swiped_candidato_ids, ttl=cache_service.SWIPED_CACHE_TTL
         )
-        .all()
-    ]
     exclude = [candidato_id(cid) for cid in swiped_candidato_ids if cid is not None]
 
-    embedding = generate_embedding(v.job_text)
+    # Prefer the embedding stored in Chroma; fall back to (cached) Gemini.
+    embedding = get_embedding_by_id(vacante_id(v.id))
+    if not embedding:
+        embedding = get_or_generate_embedding(v.job_text)
     results = search_similar(
         embedding=embedding,
         top_k=top_k,
@@ -252,4 +274,5 @@ def candidatos_for_vacante(
                 "score": score_by_id.get(pid, 0.0),
             }
         )
+    cache_service.set_json(feed_key, out, ttl=cache_service.FEED_CACHE_TTL)
     return out

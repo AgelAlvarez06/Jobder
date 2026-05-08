@@ -24,8 +24,9 @@ from models.reclutador import Reclutador
 from models.usuario import Usuario
 from models.vacante import Vacante
 from schemas.interaccion_schema import InteraccionIn, InteraccionResult
+from services import cache_service
 from services.chroma_service import query_embedding
-from services.gemini_service import generate_embedding
+from services.gemini_service import get_or_generate_embedding
 from utils.chroma_ids import vacante_id
 
 router = APIRouter(prefix="/interacciones", tags=["interacciones"])
@@ -37,7 +38,7 @@ ROLE_RECLUTADOR = "reclutador"
 def _similarity_for(candidato: Candidato, vacante: Vacante) -> float:
     """Best-effort cosine similarity in [0, 1]. Returns 0 on any failure."""
     try:
-        emb = generate_embedding(candidato.profile_text or "")
+        emb = get_or_generate_embedding(candidato.profile_text or "")
         results = query_embedding(query_embedding=emb, top_k=50, id_prefix="vacante_")
         target = vacante_id(vacante.id)
         for cid, dist in zip(results["ids"], results["distances"]):
@@ -102,6 +103,17 @@ def _record_swipe(
         db.add(own)
     db.commit()
     db.refresh(own)
+
+    # Invalidate the actor's cached feed + swiped-set so the swiped item
+    # disappears from the next request immediately.
+    if actor_role == ROLE_CANDIDATO:
+        cache_service.delete(cache_service.swiped_set_key("candidato", candidato.id))
+        cache_service.delete_prefix(cache_service.feed_candidato_prefix(candidato.id))
+    else:
+        cache_service.delete(
+            cache_service.swiped_set_key("reclutador", vacante.id_reclutador, vacante.id)
+        )
+        cache_service.delete_prefix(cache_service.feed_vacante_prefix(vacante.id))
 
     matched = False
     match_id = None

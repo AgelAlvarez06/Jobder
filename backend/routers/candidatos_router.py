@@ -121,6 +121,9 @@ async def update_me(
     except Exception as e:
         # Persist but surface the embedding error so the user knows.
         raise HTTPException(status_code=502, detail=f"Embedding failed: {e}")
+
+    # Profile changed → this candidate's feed is stale, and every recruiter's
+    # candidates feed could now rank this candidate differently.
     cache_service.delete_prefix(cache_service.feed_candidato_prefix(candidato.id))
     cache_service.delete_prefix(cache_service._k("feed", "vac"))
     return _serialize(candidato)

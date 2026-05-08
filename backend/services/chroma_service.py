@@ -24,7 +24,21 @@ def get_collection():
         )
     return _collection
 
-
+def get_embedding_by_id(id: str) -> Optional[list]:
+    """Return the stored embedding for `id`, or None if absent/error."""
+    try:
+        col = get_collection()
+        res = col.get(ids=[id], include=["embeddings"])
+        embs = res.get("embeddings") if res else None
+        if not embs:
+            return None
+        first = embs[0]
+        if first is None:
+            return None
+        return [float(x) for x in first]
+    except Exception:
+        return None
+    
 def upsert_embedding(id: str, embedding: list, document: str, metadata: Optional[dict] = None):
     col = get_collection()
     col.upsert(
