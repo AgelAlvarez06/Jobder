@@ -13,8 +13,10 @@ from routers import (
     feed_router,
     interacciones_router,
     matches_router,
+    mensajes_router,
 )
-
+# Force model import so SQLAlchemy registers the table on Base.metadata.
+from models import mensaje as _mensaje_model  # noqa: F401  
 app = FastAPI(title="Jobder API")
 
 allowed_origins = [FRONTEND_URL]
@@ -36,6 +38,7 @@ app.include_router(vacantes_router.router)
 app.include_router(feed_router.router)
 app.include_router(interacciones_router.router)
 app.include_router(matches_router.router)
+app.include_router(mensajes_router.router)
 
 
 @app.on_event("startup")
