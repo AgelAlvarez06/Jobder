@@ -1,84 +1,80 @@
-# QueryForge 🔥
+# Jobder
 
-A self-contained SQL workbench: PostgreSQL + FastAPI backend + browser UI — all in Docker.
+Sistema de búsqueda de empleo al estilo Tinder. Los candidatos deslizan sobre las vacantes, los reclutadores deslizan sobre los candidatos.
+Los "me gusta" mutuos se convierten en coincidencias. Las recomendaciones se basan en
+incrustaciones de Google Gemini almacenadas en ChromaDB y combinan el formulario de perfil estructurado
+con el texto del CV (o la descripción del puesto) analizado.
 
 ## Stack
 
-| Layer    | Technology              | Port  |
-|----------|-------------------------|-------|
-| Database | PostgreSQL 16           | 5432  |
-| Backend  | Python 3.12 + FastAPI   | 8000  |
-| Frontend | HTML/CSS/JS + nginx     | 3000  |
+| Layer    | Tech                                  | Port |
+|----------|---------------------------------------|------|
+| Database | PostgreSQL 15                         | 5433 |
+| Vector   | ChromaDB (persistent, local)          | -    |
+| Cache    | Redis 7 (in-memory only)              | -    |
+| Backend  | Python 3.12 + FastAPI                 | 8000 |
+| Frontend | React 18 + Vite + Tailwind + nginx    | 3000 |
 
-## Quick Start
+## Quick start
 
 ```bash
-# 1. Clone / unzip this folder, then:
-cp .env.example .env          # optionally edit credentials
-
-# 2. Build & start everything
+cp backend/.env.example backend/.env   # fill GEMINI_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, JWT_SECRET
 docker compose up --build
-
-# 3. Open the UI
-open http://localhost:3000
 ```
 
-The DB is pre-seeded with `spells` and `casters` tables — great for learning!
+Open http://localhost:3000.
 
-## Using the UI
+## API surface
 
-- **Sidebar** — lists all tables; click one to see its schema and auto-fill a SELECT
-- **Editor** — type any SQL; `Ctrl+Enter` to run
-- **Results** — tabular display with row count and execution time
-- **Status dot** (top-right) — green = backend connected
+### Auth
+- `GET /auth/google/login?rol=candidato|reclutador` — start OAuth (rol used on first login)
+- `GET /auth/google/callback` — redirects to `${FRONTEND_URL}/auth/callback#token=...&rol=...`
+- `GET /auth/me` — current user (requires `Authorization: Bearer <jwt>`)
 
-## API Endpoints
+### Profiles
+- `GET /candidatos/me`, `PATCH /candidatos/me` (multipart: structured fields + optional `cv` file)
+- `GET /reclutadores/me`, `PATCH /reclutadores/me`
 
-| Method | Path                       | Description             |
-|--------|----------------------------|-------------------------|
-| GET    | /health                    | DB connectivity check   |
-| GET    | /tables                    | List all tables         |
-| GET    | /tables/{name}/schema      | Column info             |
-| GET    | /tables/{name}/preview     | First 20 rows           |
-| POST   | /query                     | Run arbitrary SQL       |
+### Vacantes (recruiter scoped)
+- `GET /vacantes` — vacantes belonging to the current recruiter
+- `GET /vacantes/{id}` — read (recruiter must own it)
+- `POST /vacantes` — create (multipart, optional `job_description` file)
+- `PATCH /vacantes/{id}` — update (re-embeds on text change)
+- `DELETE /vacantes/{id}`
 
-**POST /query body:**
-```json
-{ "sql": "SELECT * FROM spells WHERE level >= 3" }
-```
+### Swipe
+- `GET /feed/vacantes` — ranked vacantes for the current candidato
+- `GET /vacantes/{id}/candidatos` — ranked candidates for a recruiter's vacante
+- `POST /interacciones` — body `{target_id, accion}`; for candidatos `target_id` is a vacante id, for recruiters it's `{vacante_id, candidato_id, accion}`. Returns `{match: bool, match_id?}`
+- `GET /matches` — matches for the current user
 
-## Persistence
+### Misc
+- `GET /health` — DB + Chroma connectivity check
 
-Data lives in the Docker volume `queryforge_pgdata`.  
-`docker compose down` keeps the data.  
-`docker compose down -v` removes it.
+## Architecture notes
 
-## Live Reload
+- One embedding per candidato and per vacante, generated from
+  `structured_form_text + "\n" + parsed_cv_or_jd_text`. Re-embed on update.
+- Chroma ids are namespaced: `candidato_<id>` / `vacante_<id>`.
+- All write endpoints require auth and verify ownership server-side.
+- Mutual likes auto-create a row in `matches`.
 
-Backend code in `./backend/` is volume-mounted — save `main.py` and FastAPI reloads instantly (no rebuild needed).
+## Caching (Redis)
 
-## Sample Queries to Try
+Redis sits in front of Postgres + Chroma + Gemini as a soft cache; failures
+log a warning and fall through.
 
-```sql
--- All evocation spells
-SELECT name, level, damage_die FROM spells WHERE school = 'Evocation' ORDER BY level;
+| Cache              | Key shape                                       | TTL                      | Invalidated by                                             |
+|--------------------|-------------------------------------------------|--------------------------|------------------------------------------------------------|
+| Embeddings         | `jobder:v1:emb:<model>:<sha256(text)>`          | `EMBEDDING_CACHE_TTL`    | Content-addressed; never invalidated explicitly            |
+| Candidate feed     | `jobder:v1:feed:cand:<id>:k<top_k>`             | `FEED_CACHE_TTL`         | `PATCH /candidatos/me`, `POST /interacciones` (candidato)  |
+| Recruiter feed     | `jobder:v1:feed:vac:<id>:k<top_k>`              | `FEED_CACHE_TTL`         | vacante create/update/delete, `POST /interacciones` (rec.) |
+| Swiped-set (cand.) | `jobder:v1:swiped:cand:<id>`                    | `SWIPED_CACHE_TTL`       | `POST /interacciones` (candidato)                          |
+| Swiped-set (rec.)  | `jobder:v1:swiped:rec:<id>:vac:<vid>`           | `SWIPED_CACHE_TTL`       | `POST /interacciones` (reclutador)                         |
 
--- Average spell level by school
-SELECT school, AVG(level)::NUMERIC(4,2) AS avg_level, COUNT(*) AS total
-FROM spells GROUP BY school ORDER BY avg_level DESC;
+Feed endpoints also reuse the embedding stored in Chroma instead of re-calling
+Gemini on every page load (falling back to a Gemini call only if missing).
 
--- Create your own table
-CREATE TABLE artifacts (
-  id SERIAL PRIMARY KEY,
-  name TEXT,
-  rarity TEXT,
-  attunement BOOLEAN DEFAULT false
-);
-
-INSERT INTO artifacts (name, rarity, attunement)
-VALUES ('Sword of Kas', 'Artifact', true),
-       ('Wand of Orcus', 'Artifact', true),
-       ('Bag of Holding', 'Uncommon', false);
-
-SELECT * FROM artifacts;
-```
+**Disable caching for local debugging**: set `REDIS_URL=` (empty) in
+`backend/.env`. The backend will log a notice and bypass Redis entirely —
+every request goes straight to Postgres + Chroma + Gemini.
