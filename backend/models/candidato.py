@@ -1,4 +1,5 @@
 from sqlalchemy import Column, BigInteger, String, Text, ForeignKey, DateTime, func
+from sqlalchemy.dialects.postgresql import JSONB
 from database.base import Base
 
 class Candidato(Base):
