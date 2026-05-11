@@ -11,4 +11,3 @@ class Reclutador(Base):
     nombre_compania = Column(String, nullable=False)
     descripcion_compania = Column(Text)
     fecha_creacion = Column(DateTime, server_default=func.now())
-    email = Column(String, unique=True)
